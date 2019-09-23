@@ -1,5 +1,5 @@
 [package]
-name = "pulsar-bind"
+name = "pulsar-wrapper"
 version = "0.1.0"
 authors = ["Guilherme Perinazzo <gperinazzo@gmail.com>"]
 edition = "2018"
