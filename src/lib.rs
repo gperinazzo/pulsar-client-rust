@@ -1,5 +1,6 @@
 mod authentication;
 mod bindings;
+mod c;
 mod client;
 mod error;
 pub mod logger;

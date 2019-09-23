@@ -10,7 +10,7 @@ pub mod auth {
     pub use super::raw::{
         pulsar_authentication_athenz_create as athenz_create,
         pulsar_authentication_create as create, pulsar_authentication_free as free,
-        pulsar_authentication_t as authentication, pulsar_authentication_tls_create as tls_create,
+        pulsar_authentication_t as ptr, pulsar_authentication_tls_create as tls_create,
         pulsar_authentication_token_create as token_create,
     };
 }
@@ -50,7 +50,7 @@ pub mod producer {
         pulsar_producer_get_last_sequence_id as get_last_sequence_id,
         pulsar_producer_get_producer_name as get_producer_name,
         pulsar_producer_get_topic as get_topic, pulsar_producer_send as send,
-        pulsar_producer_send_async as send_async, pulsar_producer_t as producer,
+        pulsar_producer_send_async as send_async, pulsar_producer_t as ptr,
     };
 }
 
