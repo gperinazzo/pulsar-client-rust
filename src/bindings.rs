@@ -54,6 +54,12 @@ pub mod producer {
     };
 }
 
+pub mod producer_config {
+    pub use super::raw::{
+        pulsar_producer_configuration_create as create, pulsar_producer_configuration_t as ptr,
+    };
+}
+
 pub mod logger {
     pub use super::raw::{
         pulsar_logger, pulsar_logger_level_t_pulsar_DEBUG as DEBUG,
