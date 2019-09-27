@@ -1,5 +1,5 @@
 use crate::authentication::Authentication;
-use crate::c::{ArcClient, CAuthentication, CClient, CClientConfiguration};
+use crate::c::{ArcClient, CAuthentication, CClient, CClientConfiguration, CProducerConfiguration};
 use std::boxed::Box;
 use std::os::raw::{c_char, c_void};
 use std::sync::Arc;
@@ -108,32 +108,15 @@ impl Client {
     }
 
     pub fn test_producer(&mut self) {
-        use crate::bindings::raw::{
-            pulsar_client_create_producer, pulsar_producer_close,
-            pulsar_producer_configuration_create, pulsar_producer_configuration_free,
-            pulsar_producer_free, pulsar_producer_t,
-        };
-        let mut producer: *mut pulsar_producer_t = std::ptr::null_mut();
         let topic = CString::new("persistent://public/default/bla").unwrap();
 
-        //let result = unsafe {
-        //    let config = pulsar_producer_configuration_create();
-        //    let r = pulsar_client_create_producer(
-        //        self.internal.ptr.as_mut(),
-        //        topic.as_ptr(),
-        //        config,
-        //        &mut producer,
-        //    );
-        //    pulsar_producer_configuration_free(config);
-        //    r
-        //};
+        let producer_config = CProducerConfiguration::new().unwrap();
 
-        //if result == 0 {
-        //    unsafe {
-        //        pulsar_producer_close(producer);
-        //        pulsar_producer_free(producer);
-        //    }
-        //}
+        let _producer = self
+            .internal
+            .clone()
+            .create_producer(&topic, &producer_config)
+            .unwrap();
     }
 }
 

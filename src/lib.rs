@@ -16,7 +16,7 @@ mod tests {
     #[test]
     fn it_works() {
         pretty_env_logger::init();
-        let client = ClientConfiguration::new("pulsar://localhost:6650")
+        let mut client = ClientConfiguration::new("pulsar://localhost:6650")
             .with_concurrent_lookup_requests(100)
             .with_io_threads(4)
             .with_operation_timeout_seconds(30)
