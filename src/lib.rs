@@ -31,7 +31,7 @@ mod tests {
             .create_producer("persistent://public/default/test")
             .unwrap();
 
-        let message = ProducerMessage::from_payload("quer namorar comigo?".as_bytes()).unwrap();
+        let message = ProducerMessage::from_payload("Hello".as_bytes()).unwrap();
         producer.send_async(&message).await.unwrap();
 
         assert!(false);

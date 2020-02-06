@@ -9,6 +9,8 @@ use std::os::raw::{c_char, c_void};
 use std::ptr::NonNull;
 use std::sync::Arc;
 
+use futures::channel::oneshot::Sender;
+
 type LoggerFunc = unsafe extern "C" fn(u32, *const c_char, i32, *const c_char, *mut c_void);
 
 #[derive(Clone, Copy)]
@@ -350,18 +352,18 @@ impl CClient {
     }
 }
 
-unsafe extern "C" fn send_proxy<F: FnOnce(PulsarResult<()>) -> ()>(
+unsafe extern "C" fn send_proxy(
     result: raw::pulsar_result,
     id: *mut message_id::ptr,
     ctx: *mut c_void,
 ) {
-    let func_ptr: *mut F = std::mem::transmute(ctx);
-    let func = Box::from_raw(func_ptr);
+    let sender_ptr: *mut Sender<PulsarResult<()>> = std::mem::transmute(ctx);
+    let sender = Box::from_raw(sender_ptr);
     if !id.is_null() {
         message_id::free(id);
     }
 
-    (*func)(result.into_pulsar_result());
+    (*sender).send(result.into_pulsar_result());
 }
 
 impl<'a> CProducer<'a> {
@@ -391,17 +393,14 @@ impl<'a> CProducer<'a> {
         unsafe { producer::send(self.ptr.as_ptr(), message.ptr.as_ptr()).into_pulsar_result() }
     }
 
-    pub(crate) fn send_async<F>(&self, message: &CMessage, callback: F)
-    where
-        F: FnOnce(PulsarResult<()>) -> (),
-    {
-        let boxed_callback = Box::new(callback);
+    pub(crate) fn send_async(&self, message: &CMessage, sender: Sender<PulsarResult<()>>) {
         unsafe {
+            let boxed = Box::new(sender);
             producer::send_async(
                 self.ptr.as_ptr(),
                 message.ptr.as_ptr(),
-                Some(send_proxy::<F>),
-                Box::into_raw(boxed_callback) as *mut c_void,
+                Some(send_proxy),
+                Box::into_raw(boxed) as *mut c_void,
             );
         }
     }
