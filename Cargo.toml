@@ -8,6 +8,8 @@ edition = "2018"
 
 [dependencies]
 log = "0.4"
+libc = "0.2"
+futures = "0.3"
 
 
 [build-dependencies]
@@ -15,3 +17,4 @@ bindgen = "0.50"
 
 [dev-dependencies]
 pretty_env_logger = "0.3"
+tokio = { version = "0.2", features = ["full"] }

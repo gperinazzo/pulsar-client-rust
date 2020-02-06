@@ -4,11 +4,33 @@ use crate::error::{IntoPulsarResult, PulsarError, PulsarResult};
 use crate::logger::Logger;
 
 use std::ffi::{CStr, CString};
+use std::marker::PhantomData;
 use std::os::raw::{c_char, c_void};
 use std::ptr::NonNull;
 use std::sync::Arc;
 
 type LoggerFunc = unsafe extern "C" fn(u32, *const c_char, i32, *const c_char, *mut c_void);
+
+#[derive(Clone, Copy)]
+pub enum CompressionType {
+    None = 0,
+    LZ4 = 1,
+    ZLib = 2,
+}
+
+#[derive(Clone, Copy)]
+pub enum RoutingMode {
+    UseSinglePartiton = 0,
+    RoundRobinDistribution = 1,
+    CustomPartitions = 2,
+}
+
+#[derive(Clone, Copy)]
+pub enum HashingScheme {
+    Murmur3 = 0,
+    Boost = 1,
+    JavaString = 2,
+}
 
 pub(crate) struct CAuthentication {
     pub ptr: NonNull<auth::ptr>,
@@ -20,6 +42,10 @@ pub(crate) struct CClientConfiguration {
 
 pub(crate) struct CMessage {
     pub ptr: NonNull<message::ptr>,
+}
+
+pub(crate) struct CMessageId {
+    pub ptr: NonNull<message_id::ptr>,
 }
 
 pub(crate) struct CClient {
@@ -43,10 +69,12 @@ pub(crate) struct CProducerConfiguration {
     ptr: NonNull<producer_config::ptr>,
 }
 
-pub(crate) struct CProducer {
+pub(crate) struct CProducer<'a> {
     ptr: NonNull<producer::ptr>,
-    client: ArcClient,
+    client: PhantomData<&'a CClient>,
 }
+
+pub(crate) type ArcProducer<'a> = Arc<CProducer<'a>>;
 
 macro_rules! drop_ptr {
     ($(($struct:ident, $mod:ident)),*) => {
@@ -62,13 +90,31 @@ macro_rules! drop_ptr {
     };
 }
 
+macro_rules! drop_lifetime_ptr {
+    ($(($struct:ident, $mod:ident)),*) => {
+        $(
+            impl<'a> Drop for $struct<'a> {
+                fn drop(&mut self) {
+                    unsafe {
+                        $mod::free(self.ptr.as_ptr());
+                    }
+                }
+            }
+        )*
+    };
+}
+
 drop_ptr! {
     (CAuthentication, auth),
     (CMessage, message),
+    (CMessageId, message_id),
     (CClientConfiguration, client_configuration),
     (CProducerConfiguration, producer_config),
-    (CProducer, producer),
     (CClient, client)
+}
+
+drop_lifetime_ptr! {
+    (CProducer, producer)
 }
 
 impl CAuthentication {
@@ -189,6 +235,72 @@ impl CProducerConfiguration {
             producer_config::set_initial_sequence_id(self.ptr.as_ptr(), initial_id);
         }
     }
+
+    pub(crate) fn set_compression_type(&self, compression: CompressionType) {
+        unsafe {
+            producer_config::set_compression_type(self.ptr.as_ptr(), compression as u32);
+        }
+    }
+
+    pub(crate) fn set_max_pending_messages(&self, max: i32) {
+        unsafe {
+            producer_config::set_max_pending_messages(self.ptr.as_ptr(), max);
+        }
+    }
+
+    pub(crate) fn set_max_pending_messages_across_partitions(&self, max: i32) {
+        unsafe {
+            producer_config::set_max_pending_messages_across_partitions(self.ptr.as_ptr(), max);
+        }
+    }
+
+    pub(crate) fn set_partitions_routing_mode(&self, mode: RoutingMode) {
+        unsafe {
+            producer_config::set_partitions_routing_mode(self.ptr.as_ptr(), mode as u32);
+        }
+    }
+
+    pub(crate) fn set_hashing_scheme(&self, scheme: HashingScheme) {
+        unsafe {
+            producer_config::set_hashing_scheme(self.ptr.as_ptr(), scheme as u32);
+        }
+    }
+
+    pub(crate) fn set_block_if_queue_full(&self, block: bool) {
+        unsafe {
+            producer_config::set_block_if_queue_full(self.ptr.as_ptr(), i32::from(block));
+        }
+    }
+
+    pub(crate) fn set_batching_enabled(&self, enabled: bool) {
+        unsafe {
+            producer_config::set_batching_enabled(self.ptr.as_ptr(), i32::from(enabled));
+        }
+    }
+
+    pub(crate) fn set_batching_max_messages(&self, max: u32) {
+        unsafe {
+            producer_config::set_batching_max_messages(self.ptr.as_ptr(), max);
+        }
+    }
+
+    pub(crate) fn set_batching_max_allowed_size_in_bytes(&self, max: u64) {
+        unsafe {
+            producer_config::set_batching_max_allowed_size_in_bytes(self.ptr.as_ptr(), max);
+        }
+    }
+
+    pub(crate) fn set_batching_max_publish_delay_ms(&self, max: u64) {
+        unsafe {
+            producer_config::set_batching_max_publish_delay_ms(self.ptr.as_ptr(), max);
+        }
+    }
+
+    pub(crate) fn set_property(&self, name: &CStr, value: &CStr) {
+        unsafe {
+            producer_config::set_property(self.ptr.as_ptr(), name.as_ptr(), value.as_ptr());
+        }
+    }
 }
 
 impl CClient {
@@ -210,11 +322,11 @@ impl CClient {
         }
     }
 
-    pub(crate) fn create_producer(
-        self: Arc<Self>,
+    pub(crate) fn create_producer<'a>(
+        &'a self,
         topic: &CStr,
         config: &CProducerConfiguration,
-    ) -> PulsarResult<CProducer> {
+    ) -> PulsarResult<ArcProducer<'a>> {
         let mut ptr = std::ptr::null_mut();
 
         let result = unsafe {
@@ -229,39 +341,152 @@ impl CClient {
         result
             .into_pulsar_result()
             .and_then(|_| match NonNull::new(ptr) {
-                Some(p) => Ok(CProducer {
+                Some(p) => Ok(Arc::new(CProducer {
                     ptr: p,
-                    client: self.clone(),
-                }),
+                    client: PhantomData,
+                })),
                 None => Err(PulsarError::UnknownError),
             })
     }
 }
 
-impl CProducer {
-    fn get_topic<'a>(&'a self) -> &'a CStr {
+unsafe extern "C" fn send_proxy<F: FnOnce(PulsarResult<()>) -> ()>(
+    result: raw::pulsar_result,
+    id: *mut message_id::ptr,
+    ctx: *mut c_void,
+) {
+    let func_ptr: *mut F = std::mem::transmute(ctx);
+    let func = Box::from_raw(func_ptr);
+    if !id.is_null() {
+        message_id::free(id);
+    }
+
+    (*func)(result.into_pulsar_result());
+}
+
+impl<'a> CProducer<'a> {
+    pub(crate) fn get_topic(&'a self) -> &'a CStr {
         unsafe {
             let ptr = producer::get_topic(self.ptr.as_ptr());
             CStr::from_ptr::<'a>(ptr)
         }
     }
 
-    fn get_producer_name<'a>(&'a self) -> &'a CStr {
+    pub(crate) fn get_producer_name(&'a self) -> &'a CStr {
         unsafe {
             let ptr = producer::get_producer_name(self.ptr.as_ptr());
             CStr::from_ptr::<'a>(ptr)
         }
     }
 
-    fn get_last_sequence_id(&self) -> i64 {
+    pub(crate) fn get_last_sequence_id(&self) -> i64 {
         unsafe { producer::get_last_sequence_id(self.ptr.as_ptr()) }
     }
 
-    fn flush(&self) -> PulsarResult<()> {
+    pub(crate) fn flush(&self) -> PulsarResult<()> {
         unsafe { producer::flush(self.ptr.as_ptr()).into_pulsar_result() }
     }
 
-    fn close(&self) -> PulsarResult<()> {
+    pub(crate) fn send(&self, message: &CMessage) -> PulsarResult<()> {
+        unsafe { producer::send(self.ptr.as_ptr(), message.ptr.as_ptr()).into_pulsar_result() }
+    }
+
+    pub(crate) fn send_async<F>(&self, message: &CMessage, callback: F)
+    where
+        F: FnOnce(PulsarResult<()>) -> (),
+    {
+        let boxed_callback = Box::new(callback);
+        unsafe {
+            producer::send_async(
+                self.ptr.as_ptr(),
+                message.ptr.as_ptr(),
+                Some(send_proxy::<F>),
+                Box::into_raw(boxed_callback) as *mut c_void,
+            );
+        }
+    }
+
+    pub(crate) fn close(&self) -> PulsarResult<()> {
         unsafe { producer::close(self.ptr.as_ptr()).into_pulsar_result() }
+    }
+}
+
+impl CMessageId {
+    unsafe fn from_ptr(ptr: *mut message_id::ptr) -> Self {
+        match NonNull::new(ptr) {
+            Some(p) => CMessageId { ptr: p },
+            None => panic!("CMessageId from_ptr called with null pointer"),
+        }
+    }
+}
+
+impl CMessage {
+    pub(crate) fn new() -> Self {
+        let ptr = unsafe { message::create() };
+        match NonNull::new(ptr) {
+            Some(p) => Self { ptr: p },
+            None => panic!("pulsar_message_create returned null pointer"),
+        }
+    }
+
+    pub(crate) fn set_content<'a>(&mut self, payload: &'a [u8]) {
+        let size = payload.len();
+        let payload_ptr = payload.as_ptr();
+        unsafe {
+            message::set_content(self.ptr.as_ptr(), payload_ptr as *mut c_void, size);
+        }
+    }
+
+    pub(crate) fn get_data<'s>(&'s self) -> &'s [u8] {
+        let length = unsafe { message::get_length(self.ptr.as_ptr()) };
+        if length == 0 {
+            &[]
+        } else {
+            let ptr = unsafe { message::get_data(self.ptr.as_ptr()) };
+            if ptr.is_null() {
+                &[]
+            } else {
+                unsafe { std::slice::from_raw_parts(ptr as *const u8, length as usize) }
+            }
+        }
+    }
+
+    pub(crate) fn set_partition_key(&mut self, key: &CStr) {
+        unsafe { message::set_partition_key(self.ptr.as_ptr(), key.as_ptr()) };
+    }
+
+    pub(crate) fn set_sequence_id(&mut self, id: i64) {
+        unsafe { message::set_sequence_id(self.ptr.as_ptr(), id) };
+    }
+
+    pub(crate) fn set_property(&mut self, key: &CStr, value: &CStr) {
+        unsafe { message::set_property(self.ptr.as_ptr(), key.as_ptr(), value.as_ptr()) }
+    }
+
+    pub(crate) fn get_property<'s>(&'s self, key: &CStr) -> Option<&'s CStr> {
+        let has_property = unsafe { message::has_property(self.ptr.as_ptr(), key.as_ptr()) };
+        if has_property != 0 {
+            let value = unsafe {
+                let ptr = message::get_property(self.ptr.as_ptr(), key.as_ptr());
+                CStr::from_ptr(ptr)
+            };
+            Some(value)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn get_topic<'s>(&'s self) -> &'s CStr {
+        unsafe {
+            let ptr = message::get_topic_name(self.ptr.as_ptr());
+            CStr::from_ptr(ptr)
+        }
+    }
+
+    pub(crate) fn get_message_id(&self) -> CMessageId {
+        unsafe {
+            let ptr = message::get_message_id(self.ptr.as_ptr());
+            CMessageId::from_ptr(ptr)
+        }
     }
 }

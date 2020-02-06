@@ -5,6 +5,7 @@ use std::ffi::NulError;
 #[derive(Clone, Copy, Debug)]
 pub enum PulsarError {
     NulError = 128,
+    InvalidString = 129,
     UnknownError = 1,
     InvalidConfiguration,
     Timeout,

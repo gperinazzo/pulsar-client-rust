@@ -31,7 +31,6 @@ pub mod client_configuration {
         pulsar_client_configuration_set_validate_hostname as set_validate_hostname,
         pulsar_client_configuration_t as ptr,
     };
-
 }
 
 pub mod client {
@@ -96,7 +95,6 @@ pub mod logger {
         pulsar_logger_level_t_pulsar_ERROR as ERROR, pulsar_logger_level_t_pulsar_INFO as INFO,
         pulsar_logger_level_t_pulsar_WARN as WARN,
     };
-
 }
 
 pub mod message {
@@ -128,5 +126,6 @@ pub mod message_id {
         pulsar_message_id_deserialize as deserialize, pulsar_message_id_earliest as earliest,
         pulsar_message_id_free as free, pulsar_message_id_latest as latest,
         pulsar_message_id_serialize as serialize, pulsar_message_id_str as as_str,
+        pulsar_message_id_t as ptr,
     };
 }
