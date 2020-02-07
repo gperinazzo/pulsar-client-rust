@@ -209,10 +209,15 @@ impl<'client> Producer<'client> {
         self.internal.send(message.get_internal())
     }
 
-    pub async fn send_async(&self, message: &ProducerMessage) -> PulsarResult<()> {
-        let (sender, receiver) = oneshot::channel::<PulsarResult<()>>();
+    pub fn close(&self) -> PulsarResult<()> {
+        self.internal.close()
+    }
 
-        self.internal.send_async(message.get_internal(), sender);
-        receiver.await.unwrap_or(Err(PulsarError::UnknownError))
+    pub async fn send_async(&self, message: &ProducerMessage) -> PulsarResult<()> {
+        self.internal.send_async(message.get_internal()).await
+    }
+
+    pub async fn close_async(&self) -> PulsarResult<()> {
+        self.internal.close_async().await
     }
 }

@@ -35,7 +35,8 @@ pub mod client_configuration {
 
 pub mod client {
     pub use super::raw::{
-        pulsar_client_create as create, pulsar_client_create_producer as create_producer,
+        pulsar_client_close_async as close_async, pulsar_client_create as create,
+        pulsar_client_create_producer as create_producer,
         pulsar_client_create_producer_async as create_producer_async, pulsar_client_free as free,
         pulsar_client_subscribe as subscribe, pulsar_client_subscribe_async as subscribe_async,
         pulsar_client_subscribe_pattern_async as subscribe_pattern_async, pulsar_client_t as ptr,
@@ -44,9 +45,9 @@ pub mod client {
 
 pub mod producer {
     pub use super::raw::{
-        pulsar_producer_close as close, pulsar_producer_flush as flush,
-        pulsar_producer_flush_async as flush_async, pulsar_producer_free as free,
-        pulsar_producer_get_last_sequence_id as get_last_sequence_id,
+        pulsar_producer_close as close, pulsar_producer_close_async as close_async,
+        pulsar_producer_flush as flush, pulsar_producer_flush_async as flush_async,
+        pulsar_producer_free as free, pulsar_producer_get_last_sequence_id as get_last_sequence_id,
         pulsar_producer_get_producer_name as get_producer_name,
         pulsar_producer_get_topic as get_topic, pulsar_producer_send as send,
         pulsar_producer_send_async as send_async, pulsar_producer_t as ptr,

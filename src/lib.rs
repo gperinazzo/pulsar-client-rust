@@ -28,7 +28,8 @@ mod tests {
             .unwrap();
 
         let producer = client
-            .create_producer("persistent://public/default/test")
+            .create_producer_async("persistent://public/default/test")
+            .await
             .unwrap();
 
         let message = ProducerMessage::from_payload("Hello".as_bytes()).unwrap();

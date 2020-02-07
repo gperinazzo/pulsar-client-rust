@@ -9,7 +9,8 @@ use std::os::raw::{c_char, c_void};
 use std::ptr::NonNull;
 use std::sync::Arc;
 
-use futures::channel::oneshot::Sender;
+use futures::channel::oneshot::{self, Sender};
+use log::error;
 
 type LoggerFunc = unsafe extern "C" fn(u32, *const c_char, i32, *const c_char, *mut c_void);
 
@@ -305,6 +306,35 @@ impl CProducerConfiguration {
     }
 }
 
+unsafe extern "C" fn close_proxy(
+    result: raw::pulsar_result,
+    ctx: *mut c_void,
+) {
+    let sender_ptr: *mut Sender<PulsarResult<()>> = std::mem::transmute(ctx);
+    let sender = Box::from_raw(sender_ptr);
+
+    if let Err(_) = (*sender).send(result.into_pulsar_result()) {
+        error!("close_proxy failed to send");
+    }
+    
+}
+
+unsafe extern "C" fn create_producer_proxy(
+    result: raw::pulsar_result,
+    prod: *mut producer::ptr,
+    ctx: *mut c_void,
+) {
+    let sender_ptr: *mut Sender<PulsarResult<*mut producer::ptr>> = std::mem::transmute(ctx);
+    let sender = Box::from_raw(sender_ptr);
+
+    let result = result.into_pulsar_result().map(|_| prod);
+
+    if let Err(value) = (*sender).send(result) {
+        error!("create_producer_proxy failed to send producer");
+        value.map(|p| producer::free(p));
+    }
+}
+
 impl CClient {
     pub(crate) fn new(
         url: &CStr,
@@ -350,6 +380,46 @@ impl CClient {
                 None => Err(PulsarError::UnknownError),
             })
     }
+
+    pub(crate) async fn create_producer_async<'a>(
+        &'a self,
+        topic: &CStr,
+        config: &CProducerConfiguration,
+    ) -> PulsarResult<ArcProducer<'a>> {
+        let (sender, receiver) = oneshot::channel();
+        let boxed_sender = Box::new(sender);
+
+        unsafe {
+            client::create_producer_async(
+                self.ptr.as_ptr(),
+                topic.as_ptr(),
+                config.ptr.as_ref(),
+                Some(create_producer_proxy),
+                Box::into_raw(boxed_sender) as *mut c_void,
+            )
+        };
+        let result = receiver.await.unwrap_or(Err(PulsarError::UnknownError));
+
+        result
+            .and_then(|ptr| match NonNull::new(ptr) {
+                Some(p) => Ok(Arc::new(CProducer {
+                    ptr: p,
+                    client: PhantomData,
+                })),
+                None => Err(PulsarError::UnknownError),
+            })
+    }
+
+    pub(crate) async fn close_async(
+        &self
+    ) -> PulsarResult<()> {
+        let (sender, receiver) = oneshot::channel();
+        let boxed_sender = Box::new(sender);
+        unsafe {
+            client::close_async(self.ptr.as_ptr(), Some(close_proxy), Box::into_raw(boxed_sender) as *mut c_void)
+        };
+        receiver.await.unwrap_or(Err(PulsarError::UnknownError))
+    }
 }
 
 unsafe extern "C" fn send_proxy(
@@ -393,20 +463,34 @@ impl<'a> CProducer<'a> {
         unsafe { producer::send(self.ptr.as_ptr(), message.ptr.as_ptr()).into_pulsar_result() }
     }
 
-    pub(crate) fn send_async(&self, message: &CMessage, sender: Sender<PulsarResult<()>>) {
+    pub(crate) async fn send_async(&self, message: &CMessage) -> PulsarResult<()> {
+        let (sender, receiver) = oneshot::channel();
+        let boxed_sender = Box::new(sender);
         unsafe {
-            let boxed = Box::new(sender);
             producer::send_async(
                 self.ptr.as_ptr(),
                 message.ptr.as_ptr(),
                 Some(send_proxy),
-                Box::into_raw(boxed) as *mut c_void,
+                Box::into_raw(boxed_sender) as *mut c_void,
             );
         }
+
+        receiver.await.unwrap_or(Err(PulsarError::UnknownError))
     }
 
     pub(crate) fn close(&self) -> PulsarResult<()> {
         unsafe { producer::close(self.ptr.as_ptr()).into_pulsar_result() }
+    }
+
+    pub(crate) async fn close_async(
+        &self
+    ) -> PulsarResult<()> {
+        let (sender, receiver) = oneshot::channel();
+        let boxed_sender = Box::new(sender);
+        unsafe {
+            producer::close_async(self.ptr.as_ptr(), Some(close_proxy), Box::into_raw(boxed_sender) as *mut c_void)
+        };
+        receiver.await.unwrap_or(Err(PulsarError::UnknownError))
     }
 }
 
