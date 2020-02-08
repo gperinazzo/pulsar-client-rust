@@ -1,8 +1,8 @@
 use crate::authentication::Authentication;
 use crate::c::{ArcClient, CAuthentication, CClient, CClientConfiguration};
+use crate::producer::{Producer, ProducerBuilder};
 use std::boxed::Box;
 use std::os::raw::{c_char, c_void};
-use std::sync::Arc;
 
 use crate::bindings::logger;
 use crate::error::{PulsarError, PulsarResult};
@@ -11,7 +11,7 @@ use std::ffi::{CStr, CString};
 
 type LoggerFunc = unsafe extern "C" fn(u32, *const c_char, i32, *const c_char, *mut c_void);
 
-pub struct ClientConfiguration<'a> {
+pub struct ClientBuilder<'a> {
     pub url: &'a str,
     pub auth: Option<Authentication<'a>>,
     pub operation_timeout_seconds: Option<i32>,
@@ -57,7 +57,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn from_config(config: ClientConfiguration) -> PulsarResult<Self> {
+    pub fn from_builder(config: ClientBuilder) -> PulsarResult<Self> {
         let url = CString::new(config.url).map_err(|_| PulsarError::InvalidUrl)?;
 
         let mut auth = match config.auth {
@@ -103,43 +103,48 @@ impl Client {
         })
     }
     pub fn from_url(url: &str) -> PulsarResult<Self> {
-        let config = ClientConfiguration::new(url);
-        Self::from_config(config)
+        let config = ClientBuilder::new(url);
+        Self::from_builder(config)
     }
 
-    pub fn test_producer(&mut self) {
-        use crate::bindings::raw::{
-            pulsar_client_create_producer, pulsar_producer_close,
-            pulsar_producer_configuration_create, pulsar_producer_configuration_free,
-            pulsar_producer_free, pulsar_producer_t,
-        };
-        let mut producer: *mut pulsar_producer_t = std::ptr::null_mut();
-        let topic = CString::new("persistent://public/default/bla").unwrap();
+    pub fn create_producer_from_builder<'a, 'c>(
+        &'c self,
+        config: ProducerBuilder<'a>,
+    ) -> PulsarResult<Producer<'c>> {
+        let (topic, config) = Producer::create_producer_configuration(config)?;
+        let producer = self.internal.create_producer(&topic, &config)?;
+        Ok(Producer::from_internal(producer))
+    }
 
-        //let result = unsafe {
-        //    let config = pulsar_producer_configuration_create();
-        //    let r = pulsar_client_create_producer(
-        //        self.internal.ptr.as_mut(),
-        //        topic.as_ptr(),
-        //        config,
-        //        &mut producer,
-        //    );
-        //    pulsar_producer_configuration_free(config);
-        //    r
-        //};
+    pub fn create_producer<'a, 'c>(&'c self, topic: &str) -> PulsarResult<Producer<'c>> {
+        let builder = ProducerBuilder::new(topic);
+        self.create_producer_from_builder(builder)
+    }
 
-        //if result == 0 {
-        //    unsafe {
-        //        pulsar_producer_close(producer);
-        //        pulsar_producer_free(producer);
-        //    }
-        //}
+    pub async fn create_producer_from_builder_async<'a, 'c>(
+        &'c self,
+        config: ProducerBuilder<'a>,
+    ) -> PulsarResult<Producer<'c>> {
+        let (topic, config) = Producer::create_producer_configuration(config)?;
+        let producer = self.internal.create_producer_async(&topic, &config).await?;
+        Ok(Producer::from_internal(producer))
+        
+    }
+
+    pub async fn create_producer_async<'a, 'c>(&'c self, topic: &str) -> PulsarResult<Producer<'c>> {
+        let builder = ProducerBuilder::new(topic);
+        self.create_producer_from_builder_async(builder).await
+    }
+
+
+    pub async fn close_async(&self) -> PulsarResult<()> {
+        self.internal.close_async().await
     }
 }
 
-impl<'a> ClientConfiguration<'a> {
+impl<'a> ClientBuilder<'a> {
     pub fn new(url: &'a str) -> Self {
-        ClientConfiguration {
+        Self {
             url,
             auth: None,
             operation_timeout_seconds: None,
@@ -194,7 +199,7 @@ impl<'a> ClientConfiguration<'a> {
         self
     }
 
-    pub fn client(self) -> PulsarResult<Client> {
-        Client::from_config(self)
+    pub fn build(self) -> PulsarResult<Client> {
+        Client::from_builder(self)
     }
 }
