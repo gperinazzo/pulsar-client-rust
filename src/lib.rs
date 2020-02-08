@@ -1,11 +1,13 @@
 mod authentication;
 mod bindings;
 mod c;
-pub mod client;
+mod message;
 mod error;
-pub mod logger;
-pub mod message;
+
+/// Pulsar producer strucutres
 pub mod producer;
+pub mod client;
+pub mod logger;
 
 pub use authentication::Authentication;
 pub use client::{Client, ClientBuilder};

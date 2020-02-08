@@ -1,5 +1,5 @@
 use crate::authentication::Authentication;
-use crate::c::{ArcClient, CAuthentication, CClient, CClientConfiguration, CProducerConfiguration};
+use crate::c::{ArcClient, CAuthentication, CClient, CClientConfiguration};
 use crate::producer::{Producer, ProducerBuilder};
 use std::boxed::Box;
 use std::os::raw::{c_char, c_void};
@@ -134,6 +134,11 @@ impl Client {
     pub async fn create_producer_async<'a, 'c>(&'c self, topic: &str) -> PulsarResult<Producer<'c>> {
         let builder = ProducerBuilder::new(topic);
         self.create_producer_from_builder_async(builder).await
+    }
+
+
+    pub async fn close_async(&self) -> PulsarResult<()> {
+        self.internal.close_async().await
     }
 }
 

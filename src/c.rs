@@ -319,6 +319,19 @@ unsafe extern "C" fn close_proxy(
     
 }
 
+unsafe extern "C" fn flush_proxy(
+    result: raw::pulsar_result,
+    ctx: *mut c_void,
+) {
+    let sender_ptr: *mut Sender<PulsarResult<()>> = std::mem::transmute(ctx);
+    let sender = Box::from_raw(sender_ptr);
+
+    if let Err(_) = (*sender).send(result.into_pulsar_result()) {
+        error!("flush_proxy failed to send");
+    }
+    
+}
+
 unsafe extern "C" fn create_producer_proxy(
     result: raw::pulsar_result,
     prod: *mut producer::ptr,
@@ -433,7 +446,9 @@ unsafe extern "C" fn send_proxy(
         message_id::free(id);
     }
 
-    (*sender).send(result.into_pulsar_result());
+    if let Err (_) = (*sender).send(result.into_pulsar_result()) {
+        error!("send_proxy failed to send");
+    }
 }
 
 impl<'a> CProducer<'a> {
@@ -457,6 +472,21 @@ impl<'a> CProducer<'a> {
 
     pub(crate) fn flush(&self) -> PulsarResult<()> {
         unsafe { producer::flush(self.ptr.as_ptr()).into_pulsar_result() }
+    }
+
+    pub (crate) async fn flush_async(&self) -> PulsarResult<()> {
+        let (sender, receiver) = oneshot::channel();
+        let boxed_sender = Box::new(sender);
+        unsafe {
+            producer::flush_async(
+                self.ptr.as_ptr(),
+                Some(flush_proxy),
+                Box::into_raw(boxed_sender) as *mut c_void,
+            );
+        }
+
+        receiver.await.unwrap_or(Err(PulsarError::UnknownError))
+        
     }
 
     pub(crate) fn send(&self, message: &CMessage) -> PulsarResult<()> {
@@ -492,6 +522,7 @@ impl<'a> CProducer<'a> {
         };
         receiver.await.unwrap_or(Err(PulsarError::UnknownError))
     }
+
 }
 
 impl CMessageId {

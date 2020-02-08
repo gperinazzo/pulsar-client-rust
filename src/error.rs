@@ -6,6 +6,7 @@ use std::ffi::NulError;
 pub enum PulsarError {
     NulError = 128,
     InvalidString = 129,
+    InvalidDuration = 130,
     UnknownError = 1,
     InvalidConfiguration,
     Timeout,
@@ -99,6 +100,12 @@ pub trait IntoPulsarResult<T> {
 impl From<NulError> for PulsarError {
     fn from(_: NulError) -> Self {
         Self::NulError
+    }
+}
+
+impl From<std::num::TryFromIntError> for PulsarError {
+    fn from(_: std::num::TryFromIntError) -> Self {
+        Self::InvalidDuration
     }
 }
 
