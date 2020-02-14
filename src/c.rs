@@ -77,6 +77,9 @@ pub(crate) struct CProducer {
     client: ArcClient,
 }
 
+unsafe impl Send for CProducer {}
+unsafe impl Sync for CProducer {}
+
 pub(crate) type ArcProducer = Arc<CProducer>;
 
 macro_rules! drop_ptr {
