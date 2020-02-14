@@ -46,6 +46,8 @@ pub(crate) struct CMessage {
     pub ptr: NonNull<message::ptr>,
 }
 
+unsafe impl Send for CMessage {}
+
 pub(crate) struct CMessageId {
     pub ptr: NonNull<message_id::ptr>,
 }
