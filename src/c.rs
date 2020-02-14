@@ -4,7 +4,6 @@ use crate::error::{IntoPulsarResult, PulsarError, PulsarResult};
 use crate::logger::Logger;
 
 use std::ffi::{CStr, CString};
-use std::marker::PhantomData;
 use std::os::raw::{c_char, c_void};
 use std::ptr::NonNull;
 use std::sync::Arc;
@@ -72,31 +71,18 @@ pub(crate) struct CProducerConfiguration {
     ptr: NonNull<producer_config::ptr>,
 }
 
-pub(crate) struct CProducer<'a> {
+pub(crate) struct CProducer {
     ptr: NonNull<producer::ptr>,
-    client: PhantomData<&'a CClient>,
+    #[allow(dead_code)]
+    client: ArcClient,
 }
 
-pub(crate) type ArcProducer<'a> = Arc<CProducer<'a>>;
+pub(crate) type ArcProducer = Arc<CProducer>;
 
 macro_rules! drop_ptr {
     ($(($struct:ident, $mod:ident)),*) => {
         $(
             impl Drop for $struct {
-                fn drop(&mut self) {
-                    unsafe {
-                        $mod::free(self.ptr.as_ptr());
-                    }
-                }
-            }
-        )*
-    };
-}
-
-macro_rules! drop_lifetime_ptr {
-    ($(($struct:ident, $mod:ident)),*) => {
-        $(
-            impl<'a> Drop for $struct<'a> {
                 fn drop(&mut self) {
                     unsafe {
                         $mod::free(self.ptr.as_ptr());
@@ -113,10 +99,7 @@ drop_ptr! {
     (CMessageId, message_id),
     (CClientConfiguration, client_configuration),
     (CProducerConfiguration, producer_config),
-    (CClient, client)
-}
-
-drop_lifetime_ptr! {
+    (CClient, client),
     (CProducer, producer)
 }
 
@@ -367,16 +350,16 @@ impl CClient {
         }
     }
 
-    pub(crate) fn create_producer<'a>(
-        &'a self,
+    pub(crate) fn create_producer(
+        arc_client: &ArcClient,
         topic: &CStr,
         config: &CProducerConfiguration,
-    ) -> PulsarResult<ArcProducer<'a>> {
+    ) -> PulsarResult<ArcProducer> {
         let mut ptr = std::ptr::null_mut();
 
         let result = unsafe {
             client::create_producer(
-                self.ptr.as_ptr(),
+                arc_client.ptr.as_ptr(),
                 topic.as_ptr(),
                 config.ptr.as_ref(),
                 &mut ptr,
@@ -388,23 +371,23 @@ impl CClient {
             .and_then(|_| match NonNull::new(ptr) {
                 Some(p) => Ok(Arc::new(CProducer {
                     ptr: p,
-                    client: PhantomData,
+                    client: arc_client.clone(),
                 })),
                 None => Err(PulsarError::UnknownError),
             })
     }
 
-    pub(crate) async fn create_producer_async<'a>(
-        &'a self,
+    pub(crate) async fn create_producer_async(
+        arc_client: &ArcClient,
         topic: &CStr,
         config: &CProducerConfiguration,
-    ) -> PulsarResult<ArcProducer<'a>> {
+    ) -> PulsarResult<ArcProducer> {
         let (sender, receiver) = oneshot::channel();
         let boxed_sender = Box::new(sender);
 
         unsafe {
             client::create_producer_async(
-                self.ptr.as_ptr(),
+                arc_client.ptr.as_ptr(),
                 topic.as_ptr(),
                 config.ptr.as_ref(),
                 Some(create_producer_proxy),
@@ -417,7 +400,7 @@ impl CClient {
             .and_then(|ptr| match NonNull::new(ptr) {
                 Some(p) => Ok(Arc::new(CProducer {
                     ptr: p,
-                    client: PhantomData,
+                    client: arc_client.clone(),
                 })),
                 None => Err(PulsarError::UnknownError),
             })
@@ -451,15 +434,15 @@ unsafe extern "C" fn send_proxy(
     }
 }
 
-impl<'a> CProducer<'a> {
-    pub(crate) fn get_topic(&'a self) -> &'a CStr {
+impl CProducer {
+    pub(crate) fn get_topic<'a>(&'a self) -> &'a CStr {
         unsafe {
             let ptr = producer::get_topic(self.ptr.as_ptr());
             CStr::from_ptr::<'a>(ptr)
         }
     }
 
-    pub(crate) fn get_producer_name(&'a self) -> &'a CStr {
+    pub(crate) fn get_producer_name<'a>(&'a self) -> &'a CStr {
         unsafe {
             let ptr = producer::get_producer_name(self.ptr.as_ptr());
             CStr::from_ptr::<'a>(ptr)

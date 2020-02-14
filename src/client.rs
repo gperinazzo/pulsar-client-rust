@@ -107,31 +107,31 @@ impl Client {
         Self::from_builder(config)
     }
 
-    pub fn create_producer_from_builder<'a, 'c>(
-        &'c self,
+    pub fn create_producer_from_builder<'a>(
+        &self,
         config: ProducerBuilder<'a>,
-    ) -> PulsarResult<Producer<'c>> {
+    ) -> PulsarResult<Producer> {
         let (topic, config) = Producer::create_producer_configuration(config)?;
-        let producer = self.internal.create_producer(&topic, &config)?;
+        let producer = CClient::create_producer(&self.internal, &topic, &config)?;
         Ok(Producer::from_internal(producer))
     }
 
-    pub fn create_producer<'a, 'c>(&'c self, topic: &str) -> PulsarResult<Producer<'c>> {
+    pub fn create_producer<'a>(&self, topic: &str) -> PulsarResult<Producer> {
         let builder = ProducerBuilder::new(topic);
         self.create_producer_from_builder(builder)
     }
 
-    pub async fn create_producer_from_builder_async<'a, 'c>(
-        &'c self,
+    pub async fn create_producer_from_builder_async<'a>(
+        &self,
         config: ProducerBuilder<'a>,
-    ) -> PulsarResult<Producer<'c>> {
+    ) -> PulsarResult<Producer> {
         let (topic, config) = Producer::create_producer_configuration(config)?;
-        let producer = self.internal.create_producer_async(&topic, &config).await?;
+        let producer = CClient::create_producer_async(&self.internal, &topic, &config).await?;
         Ok(Producer::from_internal(producer))
         
     }
 
-    pub async fn create_producer_async<'a, 'c>(&'c self, topic: &str) -> PulsarResult<Producer<'c>> {
+    pub async fn create_producer_async<'a>(&self, topic: &str) -> PulsarResult<Producer> {
         let builder = ProducerBuilder::new(topic);
         self.create_producer_from_builder_async(builder).await
     }

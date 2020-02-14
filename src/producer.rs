@@ -221,17 +221,22 @@ impl<'a> ProducerBuilder<'a> {
     }
 
     /// Builds the producer with the given client.
-    pub fn build<'c>(self, client: &'c Client) -> PulsarResult<Producer<'c>> {
+    pub fn build(self, client: &Client) -> PulsarResult<Producer> {
         client.create_producer_from_builder(self)
+    }
+
+    /// Builds the producer with the given client asyncronously.
+    pub async fn build_async(self, client: &Client) -> PulsarResult<Producer> {
+        client.create_producer_from_builder_async(self).await
     }
 }
 
 #[derive(Clone)]
-pub struct Producer<'client> {
-    internal: ArcProducer<'client>,
+pub struct Producer {
+    internal: ArcProducer,
 }
 
-impl<'client> Producer<'client> {
+impl Producer {
 
     /// Creates a producer builder.
     pub fn builder<'a>(topic: &'a str) -> ProducerBuilder<'a> {
@@ -308,7 +313,7 @@ impl<'client> Producer<'client> {
         Ok((topic, raw_config))
     }
 
-    pub(crate) fn from_internal(internal: ArcProducer<'client>) -> Self {
+    pub(crate) fn from_internal(internal: ArcProducer) -> Self {
         Self { internal }
     }
 
