@@ -326,8 +326,8 @@ impl Producer {
     }
 
     /// Send a message (async).
-    pub async fn send_async(&self, message: &ProducerMessage) -> PulsarResult<()> {
-        self.internal.send_async(message.get_internal()).await
+    pub async fn send_async(&self, message: ProducerMessage) -> PulsarResult<()> {
+        self.internal.send_async(message.into_internal()).await
     }
 
 

@@ -105,4 +105,8 @@ impl ProducerMessage {
     pub(crate) fn get_internal(&self) -> &CMessage {
         &self.internal
     }
+
+    pub(crate) fn into_internal(self) -> CMessage {
+        self.internal
+    }
 }

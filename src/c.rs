@@ -481,7 +481,7 @@ impl CProducer {
         unsafe { producer::send(self.ptr.as_ptr(), message.ptr.as_ptr()).into_pulsar_result() }
     }
 
-    pub(crate) async fn send_async(&self, message: &CMessage) -> PulsarResult<()> {
+    pub(crate) async fn send_async(&self, message: CMessage) -> PulsarResult<()> {
         let (sender, receiver) = oneshot::channel();
         let boxed_sender = Box::new(sender);
         unsafe {

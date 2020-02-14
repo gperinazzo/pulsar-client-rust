@@ -11,6 +11,7 @@ pub mod logger;
 
 pub use authentication::Authentication;
 pub use client::{Client, ClientBuilder};
+pub use error::PulsarError;
 
 #[cfg(test)]
 mod tests {

@@ -1,6 +1,7 @@
 use crate::bindings::raw::pulsar_result;
 use std::convert::From;
 use std::ffi::NulError;
+use std::fmt;
 
 #[derive(Clone, Copy, Debug)]
 pub enum PulsarError {
@@ -90,6 +91,62 @@ impl From<pulsar_result> for PulsarError {
         }
     }
 }
+
+impl fmt::Display for PulsarError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PulsarError::NulError => write!(f, "Pulsar client returned a null pointer"),
+            PulsarError::InvalidString => write!(
+                f,
+                "Received invalid string: strings must not contain zero-bytes"
+            ),
+            PulsarError::InvalidDuration => write!(f, "Received invalid duration"),
+            PulsarError::UnknownError => write!(f, "UnknownError"),
+            PulsarError::InvalidConfiguration => write!(f, "InvalidConfiguration"),
+            PulsarError::Timeout => write!(f, "TimeOut"),
+            PulsarError::LookupError => write!(f, "LookupError"),
+            PulsarError::ConnectError => write!(f, "ConnectError"),
+            PulsarError::ReadError => write!(f, "ReadError"),
+            PulsarError::AuthenticationError => write!(f, "AuthenticationError"),
+            PulsarError::AuthorizationError => write!(f, "AuthorizationError"),
+            PulsarError::ErrorGettingAuthenticationData => {
+                write!(f, "ErrorGettingAuthenticationData")
+            }
+            PulsarError::BrokerMetadataError => write!(f, "BrokerMetadataError "),
+            PulsarError::BrokerPersistenceError => write!(f, "BrokerPersistenceError "),
+            PulsarError::ChecksumError => write!(f, "ChecksumError "),
+            PulsarError::ConsumerBusy => write!(f, "ConsumerBusy "),
+            PulsarError::NotConnected => write!(f, "NotConnected "),
+            PulsarError::AlreadyClosed => write!(f, "AlreadyClosed "),
+            PulsarError::InvalidMessage => write!(f, "InvalidMessage "),
+            PulsarError::ConsumerNotInitialized => write!(f, "ConsumerNotInitialized "),
+            PulsarError::ProducerNotInitialized => write!(f, "ProducerNotInitialized "),
+            PulsarError::TooManyLookupRequestException => {
+                write!(f, "TooManyLookupRequestException ")
+            }
+            PulsarError::InvalidTopicName => write!(f, "InvalidTopicName "),
+            PulsarError::InvalidUrl => write!(f, "InvalidUrl "),
+            PulsarError::ServiceUnitNotReady => write!(f, "ServiceUnitNotReady "),
+            PulsarError::OperationNotSupported => write!(f, "OperationNotSupported "),
+            PulsarError::ProducerBlockedQuotaExceededError => {
+                write!(f, "ProducerBlockedQuotaExceededError ")
+            }
+            PulsarError::ProducerBlockedQuotaExceededException => {
+                write!(f, "ProducerBlockedQuotaExceededException ")
+            }
+            PulsarError::ProducerQueueIsFull => write!(f, "ProducerQueueIsFull "),
+            PulsarError::MessageTooBig => write!(f, "MessageTooBig "),
+            PulsarError::TopicNotFound => write!(f, "TopicNotFound "),
+            PulsarError::SubscriptionNotFound => write!(f, "SubscriptionNotFound "),
+            PulsarError::ConsumerNotFound => write!(f, "ConsumerNotFound "),
+            PulsarError::UnsupportedVersionError => write!(f, "UnsupportedVersionError "),
+            PulsarError::TopicTerminated => write!(f, "TopicTerminated "),
+            PulsarError::CryptoError => write!(f, "CryptoError "),
+        }
+    }
+}
+
+impl std::error::Error for PulsarError {}
 
 pub type PulsarResult<T> = Result<T, PulsarError>;
 
